@@ -1,0 +1,28 @@
+# Environment & Secrets
+.env
+*.env
+*.key
+*.token
+
+# Python & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Output directories & artifacts
+outputs/*
+!outputs/.gitkeep
+*.log
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
