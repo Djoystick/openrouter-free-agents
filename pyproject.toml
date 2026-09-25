@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openrouter-free-agents"
+version = "0.2.0"
+description = "Resilient LLM router with automatic 429 failover across OpenRouter free models."
+readme = "README.md"
+authors = [
+  { name = "Djoystick", email = "djoystick@users.noreply.github.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = [
+  "openrouter",
+  "llm",
+  "ai-agents",
+  "rate-limiting",
+  "failover",
+  "llama",
+  "qwen",
+  "mistral"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules"
+]
+dependencies = [
+  "requests>=2.31.0",
+  "python-dotenv>=1.0.0",
+  "rich>=13.7.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/Djoystick/openrouter-free-agents"
+Repository = "https://github.com/Djoystick/openrouter-free-agents"
+Issues = "https://github.com/Djoystick/openrouter-free-agents/issues"
+
+[project.scripts]
+openrouter-agents = "cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "examples*"]

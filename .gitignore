@@ -20,6 +20,10 @@ env/
 venv/
 .venv/
 ENV/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
 
 # Output directories & artifacts
 outputs/*

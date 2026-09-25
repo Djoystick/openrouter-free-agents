@@ -21,8 +21,8 @@ except ImportError:
 
 
 def print_banner():
-    title = "🤖 OpenRouter Free Agents Swarm (2026)"
-    desc = "Zero-Cost AI Orchestration & Autonomous Subagents"
+    title = "OpenRouter Free Agents"
+    desc = "Resilient LLM router with automatic 429 failover"
     if HAS_RICH:
         console.print(Panel(f"[bold cyan]{title}[/bold cyan]\n[dim]{desc}[/dim]", expand=False))
     else:
