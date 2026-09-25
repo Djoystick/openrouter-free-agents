@@ -1,235 +1,377 @@
-# openrouter-free-agents
+<div align="center">
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-A Python library and CLI to orchestrate OpenRouter's free-tier (`:free`) models with automated catalog polling, role-based subagents, and cascading failover on rate limits (`HTTP 429`).
-
----
-
-## Overview
-
-OpenRouter maintains a rotating list of zero-cost models (`:free`), including weights like Llama 3.3 70B, Qwen 2.5 Coder 32B, and Mistral Small 24B. While useful for automation, background tasks, and code review, using these endpoints in scripts usually presents three practical problems:
-
-1. **Frequent 429 errors:** Free tiers have low concurrency limits and get throttled during traffic spikes.
-2. **Provider volatility:** Providers frequently rotate, run out of compute, or change endpoints.
-3. **Manual failover overhead:** Writing try/except loops around every API call quickly clutters application code.
-
-`openrouter-free-agents` handles this by polling OpenRouter's live catalog, maintaining an in-memory priority queue of active free models, and automatically falling back to alternative models when a provider throttles or fails.
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    A[OpenRouter API: /models] -->|Poll & Filter| B(Active Free Pool)
-    
-    Task[Task Input] --> Swarm[AgentSwarm Orchestrator]
-    Role[Role Preset: coder, architect, etc.] --> Swarm
-    B --> Swarm
-    
-    subgraph Failover Loop
-        Swarm --> M1{Preferred Model}
-        M1 -->|200 OK| Out[Output Artifact]
-        M1 -->|429 / 503 / Timeout| M2{Secondary Model}
-        M2 -->|200 OK| Out
-        M2 -->|429 / Error| M3{Deep Pool Fallback}
-        M3 -->|200 OK| Out
-    end
-    
-    Out --> Save[Save to outputs/YYYYMMDD_role.md]
-    Out --> Pipe[Next Pipeline Stage]
+```
+  ___  ____  _____ _   _ ____   ___  _   _ _____ _____ ____  
+ / _ \|  _ \| ____| \ | |  _ \ / _ \| | | |_   _| ____|  _ \ 
+| | | | |_) |  _| |  \| | |_) | | | | | | | | | |  _| | |_) |
+| |_| |  __/| |___| |\  |  _ <| |_| | |_| | | | | |___|  _ < 
+ \___/|_|   |_____|_| \_|_| \_\\___/ \___/  |_| |_____|_| \_\
+                 FREE AGENTS SWARM
 ```
 
-### Request Lifecycle:
-1. **Catalog Resolution:** `OpenRouterMonitor` queries `/api/v1/models`, extracts models matching `:free` with `$0/$0` pricing, and sorts them by context length.
-2. **Role Injection:** The task is wrapped with specialized system instructions and temperature settings defined in `core/roles.py`.
-3. **Cascading Dispatch:** The orchestrator tries the preferred model for that role. If it hits an HTTP 429, 503, or connection timeout, it immediately forwards the full context to the next model in the candidate list.
-4. **Artifact Persistence:** Successful completions are saved as markdown documents under `outputs/`.
+### *Self-healing multi-agent orchestrator powered by OpenRouter's live zero-cost (`:free`) model catalog.*
+
+[![Python](https://img.shields.io/badge/Python-3.10+-10b981?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-06b6d4?style=flat-square)](LICENSE)
+[![OpenRouter](https://img.shields.io/badge/API-OpenRouter_Free-6366f1?style=flat-square&logo=openai&logoColor=white)](https://openrouter.ai/)
+[![Failover](https://img.shields.io/badge/Failover-Zero--Downtime_429-f59e0b?style=flat-square)](https://github.com/Djoystick/openrouter-free-agents)
+[![Architecture](https://img.shields.io/badge/Pattern-Cascading_Swarm-ec4899?style=flat-square)](https://github.com/Djoystick/openrouter-free-agents)
+
+<br/>
+
+**Why burn money on API tokens or struggle with 24GB VRAM local setups when OpenRouter serves 70B+ weights for free?**  
+`openrouter-free-agents` turns OpenRouter's rotating `:free` models into an autonomous team of specialized subagents, complete with live catalog discovery and seamless cascading failover whenever rate limits hit.
 
 ---
 
-## Installation
+[Quickstart](#-quickstart-in-60-seconds) •
+[Architecture](#-architecture--request-lifecycle) •
+[Agent Personas](#-specialized-agent-personas) •
+[CLI Showcase](#-cli-experience) •
+[Python SDK](#-python-sdk) •
+[The 429 Failover Engine](#-how-the-failover-engine-works) •
+[Русский перевод](#-полный-обзор-на-русском)
 
-Requirements: Python 3.10+
+---
+
+</div>
+
+<br/>
+
+## 🎯 The Core Concept
+
+OpenRouter regularly hosts cutting-edge open weights completely free of charge (`:free` suffix with `$0.00` pricing) — models like **Llama 3.3 70B**, **Qwen 2.5 Coder 32B**, **Mistral Small 24B**, and **Gemini Flash Experimental**.
+
+However, using them in production or coding automation has always been a pain:
+* ⚠️ **Rate Limit Walls (`HTTP 429`):** Free endpoints get throttled during traffic spikes.
+* ⚠️ **Silent Provider Shifts:** Endpoints appear, get renamed, or run out of capacity without notice.
+* ⚠️ **Context Mismatches:** Handing a massive refactoring task to a model with a tiny 8k window silently truncates your code.
+
+> [!TIP]
+> **What this package does:** It acts as an **intelligent load-balancer and agent scaffolding**. It monitors the live catalog, filters for high-context free models, assigns specialized roles (Coder, Architect, Security Auditor, UI Motion), and catches `429` errors on the fly — immediately failing over to the next candidate model without losing your prompt context.
+
+---
+
+## ⚡ Quickstart in 60 Seconds
+
+### 1. Clone & Setup Virtualenv
 
 ```bash
 git clone https://github.com/Djoystick/openrouter-free-agents.git
 cd openrouter-free-agents
 
 python -m venv venv
-# Linux / macOS:
-source venv/bin/activate
-# Windows:
+
+# Windows
 venv\Scripts\activate
+# Linux / macOS
+source venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
----
+### 2. Configure Your Free API Key
 
-## Configuration
-
-Copy the sample environment file:
+Get a key at [openrouter.ai/keys](https://openrouter.ai/keys) (no credit card required):
 
 ```bash
 cp .env.example .env
 ```
 
-Set your OpenRouter API key in `.env`:
+Add your key to `.env`:
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 
-# Optional: Set HTTP/HTTPS proxy if OpenRouter is restricted by your network
+# Optional: Add HTTP/HTTPS proxy if your network restricts openrouter.ai
 # HTTP_PROXY=http://127.0.0.1:7890
 # HTTPS_PROXY=http://127.0.0.1:7890
+```
 
-# Optional settings
-DEFAULT_TIMEOUT=90
-APP_NAME=openrouter-free-agents
+### 3. Run Your First Agent
+
+```bash
+python cli.py run --role coder --task "Write a Redis sliding-window rate limiter in Python with Lua script"
 ```
 
 ---
 
-## CLI Usage
+## 📊 Architecture & Request Lifecycle
 
-The package includes a command-line interface (`cli.py`):
+```mermaid
+flowchart TD
+    Catalog["🌐 OpenRouter Catalog\n(openrouter.ai/api/v1/models)"] -->|Periodic Discovery| Monitor["🔍 OpenRouterMonitor\n- Filters ':free' & $0/$0\n- Sorts by Context Window\n- In-memory 5m cache"]
+    
+    Monitor -->|Dynamic Candidate Pool| Swarm["🐝 AgentSwarm Engine"]
+    UserTask["📝 Task / Epic Prompt"] --> Swarm
+    RolePreset["🎭 Role Persona\n(Coder, Architect, Security...)"] --> Swarm
+    
+    subgraph Circuit_Breaker ["Cascading Failover Circuit"]
+        Swarm --> M1{"1. Preferred Model\n(e.g. Qwen 2.5 Coder)"}
+        M1 -->|200 OK| Out["✨ Extract Completion"]
+        M1 -->|429 / 503 / Timeout| M2{"2. Secondary Model\n(e.g. Llama 3.3 70B)"}
+        M2 -->|200 OK| Out
+        M2 -->|429 / Error| M3{"3. Deep Safety Pool\n(e.g. Mistral Small 24B)"}
+        M3 -->|200 OK| Out
+    end
+    
+    Out --> Artifact["💾 Save Markdown Artifact\n(outputs/YYYYMMDD_role.md)"]
+    Out --> Pipeline["🔗 Feed to Next Subagent\n(Multi-Agent Pipeline)"]
+```
 
-### 1. Scan active free models
-Polls the live catalog and displays available free models sorted by context window:
+---
+
+## 🎭 Specialized Agent Personas
+
+Each agent role comes with a tuned system prompt, optimal temperature, and a prioritized model affinity list:
+
+| Role Key | Persona & Specialty | Model Affinity Chain | Temp | Output Focus |
+|:---|:---|:---|:---:|:---|
+| `coder` | **Senior Full-Stack Engineer** | `qwen-2.5-coder-32b` ➔ `llama-3.3-70b` ➔ `mistral-small` | `0.1` | Idiomatic code, zero regressions, type hints, edge-case coverage |
+| `architect` | **Principal Solutions Architect** | `llama-3.3-70b` ➔ `nemotron-3-super` ➔ `deepseek-r1` | `0.2` | System design, database ER-diagrams, API contracts, milestones |
+| `security` | **AppSec Specialist & Pen Tester** | `nemotron-3-super` ➔ `llama-3.3-70b` ➔ `qwen-coder` | `0.1` | OWASP Top 10, XSS/SQLi mitigations, timing attacks, audit reports |
+| `motion_ui` | **Creative Frontend & Motion Dev** | `nex-n2.5-pro` ➔ `llama-3.3-70b` ➔ `mistral-small` | `0.3` | Swiss minimalism (Linear style), CSS/Tailwind, 60 FPS interactions |
+| `reviewer` | **QA Lead & Skeptical Reviewer** | `llama-3.3-70b` ➔ `qwen-coder` ➔ `gemini-flash` | `0.1` | Code diff critique, dead code hunting, automated test fixtures |
+| `general` | **Autonomous AI Assistant** | `llama-3.3-70b` ➔ `mistral-small` ➔ `gemini-flash` | `0.2` | Broad research, documentation, summarization |
+
+> [!NOTE]
+> Roles are defined in [`core/roles.py`](core/roles.py) and can be extended or customized in seconds.
+
+---
+
+## 💻 CLI Experience
+
+The command-line interface (`cli.py`) is styled with `rich` formatting:
+
+### 1. Scan Available Free Models
+Polls the OpenRouter registry and prints currently available free models with their context windows:
 
 ```bash
 python cli.py scan --min-context 16000
 ```
 
-Output:
-```
-OpenRouter Free Models Catalog
-1. meta-llama/llama-3.3-70b-instruct:free       | Context: 131,072
-2. mistralai/mistral-small-24b-instruct-2501:free | Context: 128,000
-3. qwen/qwen-2.5-coder-32b-instruct:free        | Context: 32,768
-4. nvidia/nemotron-3-super-120b-a12b:free       | Context: 32,768
-5. google/gemini-2.0-flash-exp:free             | Context: 1,048,576
+```console
+=======================================================
+🤖 OpenRouter Free Agents Swarm (2026)
+Zero-Cost AI Orchestration & Autonomous Subagents
+=======================================================
+[*] Fetching active free models from OpenRouter...
+
+✅ Discovered 16 completely free models:
+
+┏━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃  # ┃ Model ID                                    ┃ Context Window ┃ Architecture ┃
+┡━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+│  1 │ meta-llama/llama-3.3-70b-instruct:free      │        131,072 │ text->text   │
+│  2 │ mistralai/mistral-small-24b-instruct-2501:f │        128,000 │ text->text   │
+│  3 │ qwen/qwen-2.5-coder-32b-instruct:free       │         32,768 │ text->text   │
+│  4 │ nvidia/nemotron-3-super-120b-a12b:free      │         32,768 │ text->text   │
+│  5 │ google/gemini-2.0-flash-exp:free            │      1,048,576 │ multimodal   │
+│  6 │ nex-agi/nex-n2.5-pro:free                   │         32,768 │ text->text   │
+└────┴─────────────────────────────────────────────┴────────────────┴──────────────┘
 ```
 
-### 2. Benchmark provider latency
-Sends lightweight probes to test responsiveness and detect currently throttled models:
+### 2. Benchmark Response Latency
+Probes top free models with a test payload to detect throttled providers before dispatching big tasks:
 
 ```bash
 python cli.py benchmark --limit 5
 ```
 
-### 3. Run a task with a specific role
-Dispatches a prompt to an agent role with automatic failover:
+```console
+[*] Benchmarking top free models for latency and availability...
+[*] Testing meta-llama/llama-3.3-70b-instruct:free...
+[*] Testing qwen/qwen-2.5-coder-32b-instruct:free...
 
-```bash
-python cli.py run --role coder --task "Write a Redis sliding-window rate limiter in Python using Lua scripting"
+📊 Benchmark Results:
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Model ID                                    ┃ Status ┃ Latency (s) ┃ Notes ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━┩
+│ meta-llama/llama-3.3-70b-instruct:free      │ ONLINE │        1.82 │ OK    │
+│ qwen/qwen-2.5-coder-32b-instruct:free       │ ONLINE │        1.14 │ OK    │
+└─────────────────────────────────────────────┴────────┴─────────────┴───────┘
 ```
 
-### 4. Sequential multi-agent pipeline
-Chains multiple subagents together, where each agent receives the accumulated context of previous stages:
+### 3. Run a Multi-Agent Swarm Pipeline
+Chains subagents sequentially, passing the cumulative design and code from one agent to the next:
 
 ```bash
-python cli.py pipeline --task "Design and implement an idempotent payment webhook receiver" --roles architect,coder,security
+python cli.py pipeline \
+  --task "Design and write a sovereign JWT authentication middleware with sliding refresh tokens" \
+  --roles architect,coder,security
 ```
 
 ---
 
-## Python API
+## 🐍 Python SDK
 
-### Basic Dispatch
+Integrate the orchestrator directly into your Python backends, Discord/Telegram bots, or local toolchains:
+
+### Single Subagent Dispatch
 
 ```python
 from core.swarm import AgentSwarm
 
 swarm = AgentSwarm()
+
 result = swarm.dispatch(
-    task="Write an async connection pool wrapper in Python with context manager support.",
+    task="Write an asynchronous connection pool manager in Python with context manager support.",
     role="coder"
 )
 
-print(f"Model used: {result['model_used']}")
-print(f"Saved artifact: {result['artifact_file']}")
+print(f"🎉 Handled by: {result['model_used']}")
+print(f"📁 Artifact written to: {result['artifact_file']}")
 print(result["content"])
 ```
 
-### Sequential Pipeline
+### Multi-Stage Pipeline
 
 ```python
 from core.swarm import AgentSwarm
 
 swarm = AgentSwarm()
+
+# Each agent builds on top of the output of preceding agents
 stages = swarm.pipeline(
-    task="Build an authentication microservice with JWT and refresh tokens.",
+    task="Build an idempotent Stripe webhook processor with SQLite idempotency keys.",
     pipeline_roles=["architect", "coder", "security"]
 )
 
-for step in stages:
-    print(f"[{step['role']}] Handled by {step['model_used']} -> {step['artifact_file']}")
+for stage in stages:
+    print(f"[{stage['role'].upper()}] -> {stage['model_used']} -> {stage['artifact_file']}")
 ```
 
-### Catalog Monitor
+### Direct Catalog Inspection
 
 ```python
 from core.monitor import OpenRouterMonitor
 
 monitor = OpenRouterMonitor()
-free_models = monitor.get_free_models(min_context=32000)
+free_models = monitor.get_free_models(min_context=32768)
 
 for m in free_models:
-    print(m["id"], m["context_length"])
+    print(f"• {m['name']} ({m['id']}) | Context: {m['context_length']:,}")
 ```
 
 ---
 
-## Role Presets
+## 🛡️ How the Failover Engine Works
 
-| Role | Focus | Default Model Chain | Temperature |
-|---|---|---|---|
-| `coder` | Clean code, bug fixes, refactoring, algorithms | `qwen-2.5-coder-32b`, `llama-3.3-70b`, `mistral-small` | 0.1 |
-| `architect` | System design, schema modeling, API contracts | `llama-3.3-70b`, `nemotron-3-super`, `deepseek-r1` | 0.2 |
-| `security` | Vulnerability assessment, OWASP Top 10, sanitization | `nemotron-3-super`, `llama-3.3-70b`, `qwen-coder` | 0.1 |
-| `motion_ui` | CSS layouts, Tailwind, performance, animations | `nex-n2.5-pro`, `llama-3.3-70b`, `mistral-small` | 0.3 |
-| `reviewer` | Skeptical diff inspection, edge cases, unit tests | `llama-3.3-70b`, `qwen-coder`, `gemini-2.0-flash` | 0.1 |
-| `general` | General-purpose research and summaries | `llama-3.3-70b`, `mistral-small`, `gemini-2.0-flash` | 0.2 |
+The number one challenge with free AI endpoints is **traffic spikes resulting in `HTTP 429 (Too Many Requests)`**.
 
-Custom roles can be added directly to `core/roles.py`.
+Standard SDKs throw an exception or force long exponential sleeps. `openrouter-free-agents` treats free models as an ephemeral pool:
+
+```
+[Incoming Subagent Task]
+           │
+           ▼
+   [Model 1: Qwen 2.5 Coder]  ────(200 OK)────► [Save & Return Output]
+           │
+      (HTTP 429 Rate Limit)
+           │
+           ▼
+   [Model 2: Llama 3.3 70B]   ────(200 OK)────► [Save & Return Output]
+           │
+      (HTTP 503 Provider Congestion)
+           │
+           ▼
+   [Model 3: Mistral Small]   ────(200 OK)────► [Save & Return Output]
+```
+
+1. **Instant Circuit Breaking:** When a `429` is detected, the engine doesn't hammer the provider. It immediately rotates to the next model in the affinity list.
+2. **Context Preservation:** The exact prompt, role persona, and accumulated context are carried over untouched.
+3. **Audit Trail:** The returned dictionary includes `execution_log` detailing every attempt, status code, and latency measurement.
 
 ---
 
-## Practical Considerations & Trade-offs
+## ⚙️ Configuration Reference
 
-- **Latency variability:** Free-tier endpoints share provider compute pools. Response latency can range from 1s to 20s depending on upstream queue depth.
-- **Provider limits:** Some providers enforce strict per-minute rate limits. The cascading failover handles this by immediately jumping to the next candidate rather than sleeping.
-- **Context window variation:** While models like Llama 3.3 offer up to 131k context, smaller free models may cap out at 32k. The monitor filters models by `--min-context` to prevent context truncation.
+All settings can be placed in your local `.env` file or exported as environment variables:
+
+| Variable | Type | Default | Description |
+|:---|:---:|:---:|:---|
+| `OPENROUTER_API_KEY` | `string` | *Required* | Your free OpenRouter API key (`sk-or-v1-...`) |
+| `HTTP_PROXY` | `url` | `""` | Optional HTTP proxy (e.g. `http://127.0.0.1:7890`) |
+| `HTTPS_PROXY` | `url` | `""` | Optional HTTPS proxy |
+| `DEFAULT_TIMEOUT` | `int` | `90` | Network timeout per request in seconds |
+| `APP_NAME` | `string` | `"OpenRouter Free Agents Swarm"` | Application title passed in headers |
+| `APP_REFERER` | `url` | Repository URL | Referer header for OpenRouter analytics |
 
 ---
 
-## Project Structure
+## 📁 Repository Structure
 
 ```
 openrouter-free-agents/
-├── .env.example        # Environment variables template
-├── .gitignore          # Ignores .env, virtualenvs, outputs
-├── LICENSE             # MIT License
-├── requirements.txt    # requests, python-dotenv, rich
-├── config.py           # Configuration and proxy resolution
-├── cli.py              # CLI entry point
+├── .env.example              # Clean configuration template (no secrets)
+├── .gitignore                # Safely ignores .env, pycache, outputs
+├── LICENSE                   # Open-source MIT License
+├── requirements.txt          # Lightweight dependencies (requests, python-dotenv, rich)
+├── config.py                 # Environment, proxy, and header resolver
+├── cli.py                    # Interactive and automated CLI interface
 ├── core/
-│   ├── __init__.py     # Core exports
-│   ├── monitor.py      # Catalog polling & latency benchmarking
-│   ├── roles.py        # System prompts and model affinity chains
-│   └── swarm.py        # Dispatcher and failover loop
+│   ├── __init__.py           # Public exports
+│   ├── monitor.py            # Live catalog discovery & latency benchmark
+│   ├── roles.py              # Persona definitions & model affinity chains
+│   └── swarm.py              # Orchestration dispatcher with cascading failover
 ├── examples/
-│   ├── quick_scan.py   # Minimal catalog inspection script
-│   └── run_subagent.py # Minimal agent invocation script
-└── outputs/            # Generated markdown artifacts (.gitkeep)
+│   ├── quick_scan.py         # 10-line script to inspect free models
+│   └── run_subagent.py       # 15-line script to dispatch a task
+└── outputs/                  # Auto-generated markdown artifacts (.gitkeep)
 ```
 
 ---
 
-## License
+## 🇷🇺 Полный обзор на русском
 
-MIT. See [LICENSE](LICENSE) for details.
+<details>
+<summary><b>Нажмите, чтобы развернуть подробное описание на русском языке</b></summary>
+
+### В чём главная идея?
+OpenRouter предоставляет огромную коллекцию топовых моделей с суффиксом `:free` и нулевой ценой ($0 / $0). Среди них такие гиганты, как **Llama 3.3 70B**, **Qwen 2.5 Coder 32B** и **Mistral Small 24B**.
+
+Однако на практике использование бесплатных моделей упирается в две проблемы:
+1. **Лимиты `429 Too Many Requests`:** при нагрузке провайдер временно блокирует вызовы.
+2. **Ротация моделей:** провайдеры бесплатных моделей постоянно меняются, появляются новые версии, а старые уходят.
+
+### Что делает этот инструмент:
+* **Авто-сканер каталога:** скрипт обращается напрямую к `openrouter.ai/api/v1/models` и собирает все активные бесплатные модели, сортируя их по размеру контекста.
+* **Каскадный обход ошибок (Failover):** если первая модель выдаёт `429` или падает по таймауту, оркестратор не завершает работу с ошибкой, а моментально перенаправляет задачу на вторую и третью модель из списка, сохраняя весь контекст.
+* **5 готовых ролей:** Архитектор, Программист, Аудитор безопасности, UI/UX разработчик микроанимаций и Код-ревьюер.
+* **Multi-Agent Pipeline:** возможность запустить конвейер `Архитектор -> Кодер -> Безопасник`, где каждый следующий агент анализирует результат работы предыдущего.
+* **Поддержка Прокси:** если OpenRouter или Cloudflare блокируются вашим провайдером, просто укажите `HTTP_PROXY=http://127.0.0.1:7890` в `.env`.
+
+### Команды консоли:
+```bash
+# 1. Посмотреть доступные бесплатные модели с контекстом от 16k
+python cli.py scan --min-context 16000
+
+# 2. Проверить скорость отклика серверов
+python cli.py benchmark
+
+# 3. Отдать задачу субагенту-программисту
+python cli.py run --role coder --task "Напиши алгоритм LRU кэша на Python"
+
+# 4. Запустить цепочку из 3 агентов
+python cli.py pipeline --task "Разработай сервис сокращения ссылок" --roles architect,coder,security
+```
+</details>
+
+---
+
+## 🤝 Contributing
+
+Issues, new role definitions, and pull requests are welcome!
+
+1. Fork the repo.
+2. Create your branch (`git checkout -b feature/awesome-role`).
+3. Commit your changes (`git commit -m 'feat: add database tuning role'`).
+4. Push to the branch (`git push origin feature/awesome-role`).
+5. Open a Pull Request.
+
+---
+
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
+Feel free to use it in your personal, educational, or commercial automation workflows.
