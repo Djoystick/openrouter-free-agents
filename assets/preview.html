@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      width: 1280px;
+      height: 640px;
+      background-color: #09090b;
+      color: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 56px 64px;
+      position: relative;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient background glows */
+    .glow-1 {
+      position: absolute;
+      top: -120px;
+      left: 10%;
+      width: 550px;
+      height: 350px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0) 70%);
+      filter: blur(50px);
+      pointer-events: none;
+    }
+    .glow-2 {
+      position: absolute;
+      bottom: -100px;
+      right: 10%;
+      width: 500px;
+      height: 350px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0) 70%);
+      filter: blur(50px);
+      pointer-events: none;
+    }
+    .grid-pattern {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 80%);
+      pointer-events: none;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      z-index: 2;
+    }
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      letter-spacing: 0.02em;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+    }
+    .repo-tag {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    /* Main Content */
+    .main {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .title {
+      font-size: 58px;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.08;
+      background: linear-gradient(180deg, #ffffff 40%, #d4d4d8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .title span {
+      background: linear-gradient(135deg, #6366f1 20%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 22px;
+      color: #a1a1aa;
+      font-weight: 400;
+      line-height: 1.4;
+      max-width: 850px;
+      letter-spacing: -0.01em;
+    }
+
+    /* Circuit Diagram Card */
+    .circuit-card {
+      margin-top: 8px;
+      background: rgba(24, 24, 27, 0.65);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+    .node {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .node-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #71717a;
+      font-weight: 600;
+    }
+    .node-val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fafafa;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .arrow {
+      color: #52525b;
+      font-size: 18px;
+      font-weight: 300;
+    }
+    .badge-err {
+      padding: 3px 8px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    .badge-ok {
+      padding: 3px 8px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #34d399;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    /* Footer badges */
+    .footer {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .badges {
+      display: flex;
+      gap: 10px;
+    }
+    .pill {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      color: #d4d4d8;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .author {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      color: #71717a;
+    }
+    .author strong {
+      color: #a1a1aa;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+  <div class="grid-pattern"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand-badge">
+      <div class="status-dot"></div>
+      <span>OpenRouter Free Tier Swarm</span>
+    </div>
+    <div class="repo-tag">github.com/Djoystick/openrouter-free-agents</div>
+  </div>
+
+  <!-- Main Hero -->
+  <div class="main">
+    <h1 class="title">OpenRouter <span>Free Agents</span></h1>
+    <p class="subtitle">
+      Zero-cost LLM router with automatic 429 failover, live catalog discovery, and resilient multi-agent pipelines.
+    </p>
+
+    <!-- Circuit Card -->
+    <div class="circuit-card">
+      <div class="node">
+        <span class="node-label">1. Primary Candidate</span>
+        <span class="node-val">Qwen 2.5 Coder 32B <span class="badge-err">HTTP 429</span></span>
+      </div>
+      <div class="arrow">➔</div>
+      <div class="node">
+        <span class="node-label">2. Cascade Routing</span>
+        <span class="node-val" style="color: #818cf8;">Zero Prompt Loss</span>
+      </div>
+      <div class="arrow">➔</div>
+      <div class="node">
+        <span class="node-label">3. Fallback Model</span>
+        <span class="node-val">Llama 3.3 70B <span class="badge-ok">200 OK (1.4s)</span></span>
+      </div>
+      <div class="arrow">➔</div>
+      <div class="node">
+        <span class="node-label">4. Output Artifact</span>
+        <span class="node-val" style="color: #34d399;">outputs/coder.md</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="badges">
+      <div class="pill">🐍 Python 3.10+</div>
+      <div class="pill">⚡ Auto 429 Failover</div>
+      <div class="pill">🔍 Live Discovery</div>
+      <div class="pill">🐝 Multi-Agent Swarm</div>
+      <div class="pill">⚖️ MIT License</div>
+    </div>
+    <div class="author">
+      by <strong>@Djoystick</strong>
+    </div>
+  </div>
+</body>
+</html>
